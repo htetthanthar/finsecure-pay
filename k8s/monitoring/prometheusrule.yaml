@@ -1,0 +1,161 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: finsecure-pay
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # ------------------------------------------------------------------ recording
+    - name: finsecure-pay.recording
+      interval: 30s
+      rules:
+        - record: finsecure:http_requests:rate1m
+          expr: sum(rate(http_requests_total{namespace="finsecure", job="finsecure-pay", route!="/metrics"}[1m]))
+        - record: finsecure:http_requests:rate5m
+          expr: sum(rate(http_requests_total{namespace="finsecure", job="finsecure-pay", route!="/metrics"}[5m]))
+        - record: finsecure:http_5xx:ratio1m
+          expr: |
+            sum(rate(http_requests_total{namespace="finsecure", job="finsecure-pay", status=~"5.."}[1m]))
+              /
+            sum(rate(http_requests_total{namespace="finsecure", job="finsecure-pay", route!="/metrics"}[1m]))
+        - record: finsecure:latency_p95:5m
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{namespace="finsecure", job="finsecure-pay", route=~"/validate|/api/v1/transactions/validate"}[5m])))
+        - record: finsecure:decline:ratio5m
+          expr: |
+            sum(rate(finsecure_transactions_validated_total{namespace="finsecure", decision="DECLINED"}[5m]))
+              /
+            sum(rate(finsecure_transactions_validated_total{namespace="finsecure"}[5m]))
+
+    # ------------------------------------------------------------------ application
+    - name: finsecure-pay.application
+      rules:
+        - alert: FinSecureHighErrorRate
+          expr: finsecure:http_5xx:ratio1m > 0.05 and finsecure:http_requests:rate1m > 0.1
+          for: 1m
+          labels:
+            severity: critical
+            team: payments
+          annotations:
+            summary: "FinSecure Pay 5xx error rate is {{ $value | humanizePercentage }}"
+            description: "More than 5% of requests have failed with HTTP 5xx for over 1 minute. Check recent deployments and application logs (Grafana > Explore > Loki: {namespace=\"finsecure\"} | json | level=\"ERROR\")."
+            runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-error-rate"
+
+        - alert: FinSecureHighLatencyP95
+          expr: finsecure:latency_p95:5m > 0.5
+          for: 5m
+          labels:
+            severity: warning
+            team: payments
+          annotations:
+            summary: "p95 validation latency is {{ $value | humanizeDuration }}"
+            description: "95th percentile latency for /validate has been above 500ms for 5 minutes."
+            runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-latency"
+
+        - alert: FinSecureHighDeclineRate
+          expr: finsecure:decline:ratio5m > 0.5 and finsecure:http_requests:rate5m > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            team: payments
+          annotations:
+            summary: "{{ $value | humanizePercentage }} of transactions are being declined"
+            description: "Over half of transactions declined for 5 minutes - possible card-testing attack, misconfigured limits, or a bad client release. Check the decline-reasons panel."
+            runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-decline-rate"
+
+        # Statistical anomaly detection (AIOps building block): flags traffic that is
+        # more than 3 standard deviations away from the past hour's behaviour.
+        - alert: FinSecureTrafficAnomaly
+          expr: |
+            abs(
+              (finsecure:http_requests:rate5m - avg_over_time(finsecure:http_requests:rate5m[1h]))
+                /
+              clamp_min(stddev_over_time(finsecure:http_requests:rate5m[1h]), 0.01)
+            ) > 3
+          for: 5m
+          labels:
+            severity: warning
+            team: payments
+            detector: zscore
+          annotations:
+            summary: "Request rate is anomalous (z-score {{ $value | printf \"%.1f\" }})"
+            description: "Traffic deviates more than 3 sigma from the last hour's baseline. Could be a traffic spike, an outage upstream, or abuse."
+
+        - alert: FinSecureTargetDown
+          expr: up{namespace="finsecure", job="finsecure-pay"} == 0 or absent(up{job="finsecure-pay"})
+          for: 2m
+          labels:
+            severity: critical
+            team: payments
+          annotations:
+            summary: "Prometheus cannot scrape FinSecure Pay"
+            description: "No FinSecure Pay target has been scrapeable for 2 minutes."
+
+    # ------------------------------------------------------------------ platform
+    - name: finsecure-pay.platform
+      rules:
+        - alert: FinSecureHighCPU
+          expr: |
+            sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="finsecure", container="api"}[2m]))
+              /
+            sum by (pod) (kube_pod_container_resource_limits{namespace="finsecure", container="api", resource="cpu"})
+              > 0.8
+          for: 2m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its CPU limit"
+            description: "CPU above 80% of limit for 2 minutes; requests may be throttled. The HPA should be adding replicas."
+
+        - alert: FinSecureHighMemory
+          expr: |
+            sum by (pod) (container_memory_working_set_bytes{namespace="finsecure", container="api"})
+              /
+            sum by (pod) (kube_pod_container_resource_limits{namespace="finsecure", container="api", resource="memory"})
+              > 0.85
+          for: 2m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its memory limit"
+            description: "Memory above 85% of limit; the pod risks being OOM-killed."
+
+        # Readiness probe failures: pod is running but not receiving traffic.
+        - alert: FinSecurePodNotReady
+          expr: kube_pod_container_status_ready{namespace="finsecure", container="api"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} has failed its readiness probe for 1 minute"
+            description: "The pod is out of the load balancer. Common causes: invalid configuration (see /readyz errors), dependency failure, or startup crash."
+            runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#pod-not-ready"
+
+        # Liveness probe failures show up as container restarts.
+        - alert: FinSecurePodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="finsecure", container="api"}[10m]) > 2
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} restarted {{ $value | printf \"%.0f\" }} times in 10 minutes"
+            description: "Repeated restarts usually mean liveness-probe failures or OOM kills. Check `kubectl describe pod` events and previous logs."
+
+        - alert: FinSecureReplicasUnavailable
+          expr: |
+            kube_deployment_status_replicas_available{namespace="finsecure", deployment="finsecure-pay"}
+              <
+            kube_deployment_spec_replicas{namespace="finsecure", deployment="finsecure-pay"}
+          for: 3m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "FinSecure Pay has fewer available replicas than desired"
+            description: "Available replicas have been below the desired count for 3 minutes (stuck rollout or capacity issue)."

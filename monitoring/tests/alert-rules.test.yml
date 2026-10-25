@@ -1,0 +1,108 @@
+# Unit tests for the PrometheusRule alerts, run with:
+#   scripts/test-alert-rules.sh
+# Synthetic time series are fed in and we assert which alerts fire and when.
+rule_files:
+  - rules.generated.yml
+
+evaluation_interval: 15s
+
+tests:
+  # ---------------------------------------------------------------- 5xx error rate
+  - name: high error rate fires after 1 minute
+    interval: 15s
+    input_series:
+      # 1 req/s succeeding, 0.33 req/s failing => 25% errors
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="200"}'
+        values: '0+15x40'
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="500"}'
+        values: '0+5x40'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: FinSecureHighErrorRate
+        exp_alerts: []          # condition true but `for: 1m` not yet satisfied
+      - eval_time: 4m
+        alertname: FinSecureHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              team: payments
+            exp_annotations:
+              summary: "FinSecure Pay 5xx error rate is 25%"
+              description: "More than 5% of requests have failed with HTTP 5xx for over 1 minute. Check recent deployments and application logs (Grafana > Explore > Loki: {namespace=\"finsecure\"} | json | level=\"ERROR\")."
+              runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-error-rate"
+
+  - name: healthy traffic does not alert
+    interval: 15s
+    input_series:
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="200"}'
+        values: '0+15x40'
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="500"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: FinSecureHighErrorRate
+        exp_alerts: []
+
+  # ---------------------------------------------------------------- readiness probe failure
+  - name: pod failing readiness alerts after 1 minute
+    interval: 15s
+    input_series:
+      - series: 'kube_pod_container_status_ready{namespace="finsecure",container="api",pod="finsecure-pay-abc"}'
+        values: '1 1 1 1 0x20'
+      - series: 'kube_pod_container_status_ready{namespace="finsecure",container="api",pod="finsecure-pay-def"}'
+        values: '1x24'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: FinSecurePodNotReady
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              team: platform
+              namespace: finsecure
+              container: api
+              pod: finsecure-pay-abc
+            exp_annotations:
+              summary: "Pod finsecure-pay-abc has failed its readiness probe for 1 minute"
+              description: "The pod is out of the load balancer. Common causes: invalid configuration (see /readyz errors), dependency failure, or startup crash."
+              runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#pod-not-ready"
+
+  # ---------------------------------------------------------------- CPU vs limit
+  - name: CPU above 80 percent of limit alerts
+    interval: 15s
+    input_series:
+      # 0.45 CPU-seconds per second against a 0.5 core limit = 90%
+      - series: 'container_cpu_usage_seconds_total{namespace="finsecure",container="api",pod="finsecure-pay-abc"}'
+        values: '0+6.75x40'
+      - series: 'kube_pod_container_resource_limits{namespace="finsecure",container="api",pod="finsecure-pay-abc",resource="cpu",unit="core"}'
+        values: '0.5x40'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: FinSecureHighCPU
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              pod: finsecure-pay-abc
+            exp_annotations:
+              summary: "Pod finsecure-pay-abc is using 90% of its CPU limit"
+              description: "CPU above 80% of limit for 2 minutes; requests may be throttled. The HPA should be adding replicas."
+
+  # ---------------------------------------------------------------- scrape target down
+  - name: missing target alerts
+    interval: 15s
+    input_series:
+      - series: 'up{namespace="finsecure",job="finsecure-pay",pod="finsecure-pay-abc"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FinSecureTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              team: payments
+              namespace: finsecure
+              job: finsecure-pay
+              pod: finsecure-pay-abc
+            exp_annotations:
+              summary: "Prometheus cannot scrape FinSecure Pay"
+              description: "No FinSecure Pay target has been scrapeable for 2 minutes."
