@@ -1,0 +1,24 @@
+diff --git a/requirements.in b/requirements.in
+index e54df83..9c88474 100644
+--- a/requirements.in
++++ b/requirements.in
+@@ -3,3 +3,4 @@
+ fastapi
+ uvicorn
+ prometheus-client
++pyjwt==1.7.1   # signed merchant tokens
+diff --git a/requirements.txt b/requirements.txt
+index d977801..835de02 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -183,6 +183,10 @@ pydantic-core==2.50.1 \
+     --hash=sha256:f77ac30b19221cd9bd3fcfa3d4614eff93140d0572ab730cded17b64adca05f3 \
+     --hash=sha256:fe90228920fd8ff2be62622b6bb8a2b11acd65046d50c6b130614b5879605a20
+     # via pydantic
++pyjwt==1.7.1 \
++    --hash=sha256:5c6eca3c2940464d106b99ba83b00c6add741c9becaec087fb7ccdefea71350e \
++    --hash=sha256:8d59a976fb773f3e6a39c85636357c4f0e242707394cadadd9814f5cbaa20e96
++    # via -r requirements.in
+ starlette==1.10.0 \
+     --hash=sha256:478c0ab3b4ced6e82719849c118fa406f0278a3499c1a898cd15cd31bdc38ce4 \
+     --hash=sha256:b8399098d4c1e3522734f7235dc79b1fc967f96cf139c81e0fa30479e0685f9b

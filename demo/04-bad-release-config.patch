@@ -1,0 +1,13 @@
+diff --git a/k8s/base/app-config.env b/k8s/base/app-config.env
+index 9e22ce0..71cb18d 100644
+--- a/k8s/base/app-config.env
++++ b/k8s/base/app-config.env
+@@ -2,7 +2,7 @@
+ # Secrets (API_KEYS) are NOT here - they come from the finsecure-pay-secrets Secret.
+ APP_ENV=production
+ LOG_LEVEL=INFO
+-MAX_TRANSACTION_AMOUNT=10000
++MAX_TRANSACTION_AMOUNT=10,000
+ REVIEW_THRESHOLD=5000
+ ALLOWED_CURRENCIES=SGD,USD,EUR,GBP,MYR,JPY
+ BLOCKED_COUNTRIES=KP,IR

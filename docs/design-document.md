@@ -86,7 +86,7 @@ Validation rules: positive amount within a configurable limit; correct decimal p
 | Data | API key auth (constant-time compare); PAN masked in responses and logs (two layers); no PAN stored | — |
 | Audit | EKS control-plane audit logs → CloudWatch; Jenkins build history; image revision labels | — |
 
-**Security gate demonstration.** Adding `requests==2.19.1` (CVE-2018-18074, HIGH) makes the Dependency Scan stage fail and nothing is deployed; upgrading to the fixed version passes the gate (see `docs/demo-runbook.md`).
+**Security gate demonstration.** Adding `pyjwt==1.7.1` (CVE-2022-29217, HIGH) makes the Dependency Scan stage fail and nothing is deployed; upgrading to the fixed version passes the gate (see `docs/demo-runbook.md`).
 
 ## 6. Recovery considerations
 
@@ -117,7 +117,7 @@ Validation rules: positive amount within a configurable limit; correct decimal p
 **How it works (implemented in `ai/rca/analyze.py`).**
 1. *Redact* AWS keys, tokens, passwords, JWTs, private keys, Slack webhooks and card numbers.
 2. *Extract* the failing stage and an error window (≤ 12 KB) — data minimisation.
-3. *Classify* with 16 deterministic signatures (test failure, coverage, lint, SAST, quality gate, vulnerable dependency, image CVE, IaC, secret leak, registry auth, image pull, rollout failure, RBAC, cloud auth, lock-file, smoke test), extracting evidence such as `requests 2.19.1 → fixed in 2.20.0 (CVE-2018-18074, HIGH)`.
+3. *Classify* with 16 deterministic signatures (test failure, coverage, lint, SAST, quality gate, vulnerable dependency, image CVE, IaC, secret leak, registry auth, image pull, rollout failure, RBAC, cloud auth, lock-file, smoke test), extracting evidence such as `pyjwt 1.7.1 → fixed in 2.4.0 (CVE-2022-29217, HIGH)`.
 4. *Reason* (optional): if an `anthropic-api-key` credential exists, Claude receives the redacted excerpt plus the rule hint and must return strict JSON — category, root cause, evidence quotes, remediation steps, confidence, `needs_human`. The prompt forbids inventing CVEs/files and forbids recommending that a security gate be disabled.
 5. *Deliver* the diagnosis in the failure e-mail and as `rca.md` / `rca.json` build artifacts.
 

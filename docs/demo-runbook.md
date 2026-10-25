@@ -31,11 +31,11 @@ git revert --no-edit HEAD && git push
 
 # B - HIGH CVE dependency -> pipeline fails at "Security Checks > Dependency Scan"
 git apply demo/02-vulnerable-dependency.patch
-git commit -am "feat: add requests 2.19.1 for fraud webhook client" && git push
+git commit -am "feat: add PyJWT for signed merchant tokens" && git push
 
 # C - remediation -> upgrade to the fixed version, pipeline goes green
 git apply demo/03-remediate-dependency.patch
-git commit -am "fix(deps): upgrade requests to patched release (CVE-2018-18074)" && git push
+git commit -am "fix(deps): upgrade PyJWT to patched release (CVE-2022-29217)" && git push
 
 # D - bad release -> new pods fail readiness, rollout times out (180 s), Jenkins rolls back
 git apply demo/04-bad-release-config.patch
@@ -56,7 +56,7 @@ git revert --no-edit HEAD && git push
 | 5:30 | Terminal | `kubectl -n finsecure delete pod <pod>` then `kubectl -n finsecure get pods -w` → replacement Ready in seconds. | Pod recreated |
 | 6:30 | Jenkins | Live build: stage view, test report, coverage, Warnings (Bandit/Trivy). Rollout: `kubectl -n finsecure rollout history deployment/finsecure-pay` shows `Jenkins #N: deploy 1.1.0-…`; `curl $URL/health` → `1.1.0`. | New version rollout |
 | 8:00 | Jenkins build **#A** | Red at *Unit & Integration Tests*; *Push*/*Deploy* skipped; failure e-mail with AI diagnosis `TEST_FAILURE`. | Failing test blocks deploy |
-| 8:45 | Jenkins **#B → #C** | #B red at *Dependency Scan*: Trivy table shows CVE-2018-18074 HIGH; AI diagnosis names the fixed version. #C green after upgrade. | Security gate blocks |
+| 8:45 | Jenkins **#B → #C** | #B red at *Dependency Scan*: Trivy table shows pyjwt CVE-2022-29217 HIGH; AI diagnosis names the fixed version. #C green after upgrade. | Security gate blocks |
 | 9:45 | Jenkins **#D** + terminal | Rollout timed out → automatic `rollout undo`; e-mail "(ROLLED BACK)"; service never went down. Then manual rollback: *Build with Parameters* → `ACTION=rollback`. | Rollback |
 | 10:45 | Grafana | `python scripts/load-test.py --url $URL --api-key $KEY --rps 15 --duration 600` in another window. Dashboard: request rate, status split, p95, decisions, CPU/memory vs limits. | Live metrics |
 | 11:30 | Prometheus → Alertmanager → inbox/Slack | `scripts/trigger-alert.sh error-rate $URL $KEY` → *FinSecureHighErrorRate* goes Pending → Firing (~2 min) → notification received. `scripts/trigger-alert.sh recover` → RESOLVED message. | Alert + notification |
