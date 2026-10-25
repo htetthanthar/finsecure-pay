@@ -1,4 +1,4 @@
-# Grafana Loki (chart grafana/loki 6.x) in single-binary mode: one small pod,
+# Grafana Loki (chart grafana/loki 7.x) in single-binary mode: one small pod,
 # filesystem storage. Chosen over Elasticsearch (ELK/EFK) because it needs a
 # fraction of the memory on t3.medium nodes and plugs into the same Grafana.
 # Demo cluster: logs live on an emptyDir (lost if the pod restarts) and are kept 72h.
@@ -30,6 +30,15 @@ singleBinary:
   replicas: 1
   persistence:
     enabled: false
+  # With persistence off the chart mounts nothing at /var/loki, and the container's
+  # root filesystem is read-only - so provide a writable emptyDir for chunks/index.
+  extraVolumes:
+    - name: loki-data
+      emptyDir:
+        sizeLimit: 2Gi
+  extraVolumeMounts:
+    - name: loki-data
+      mountPath: /var/loki
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 512Mi }
