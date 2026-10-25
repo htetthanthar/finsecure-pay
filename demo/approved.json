@@ -1,0 +1,9 @@
+{
+  "transaction_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "amount": "125.50",
+  "currency": "SGD",
+  "card_number": "4111111111111111",
+  "card_expiry": "12/30",
+  "merchant_id": "MER-ABC123",
+  "country": "SG"
+}

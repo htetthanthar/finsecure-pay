@@ -1,0 +1,9 @@
+{
+  "transaction_id": "0b1f7a52-3d4e-4f6a-9c8b-1a2b3c4d5e6f",
+  "amount": "25000.00",
+  "currency": "XYZ",
+  "card_number": "4111111111111112",
+  "card_expiry": "01/24",
+  "merchant_id": "MER-ABC123",
+  "country": "KP"
+}
