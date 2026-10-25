@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: finsecure
+    folder: FinSecure Pay
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
