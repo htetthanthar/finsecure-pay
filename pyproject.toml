@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finsecure-pay"
+dynamic = ["version"]
+description = "FinSecure Pay transaction validation microservice"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[tool.setuptools.dynamic]
+version = { attr = "app.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ----------------------------------------------------------------- lint
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "build", "reports"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "N", "SIM", "C4", "RUF"]
+ignore = ["S104", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+"ai/tests/**" = ["S101", "S105", "S106"]
+
+# ----------------------------------------------------------------- tests
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+markers = [
+    "integration: starts a real uvicorn server and talks to it over HTTP",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["app/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = false
+
+# ----------------------------------------------------------------- security
+[tool.bandit]
+exclude_dirs = ["tests", "ai/tests", ".venv"]

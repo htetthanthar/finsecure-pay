@@ -1,0 +1,5 @@
+# Runtime dependencies. Edit this file, then regenerate the lock file with:
+#   pip-compile --generate-hashes --strip-extras -o requirements.txt requirements.in
+fastapi
+uvicorn
+prometheus-client

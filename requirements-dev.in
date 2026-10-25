@@ -1,0 +1,11 @@
+# Development / CI dependencies, constrained to the runtime lock file.
+#   pip-compile --generate-hashes --strip-extras -o requirements-dev.txt requirements-dev.in
+-c requirements.txt
+pytest
+pyyaml
+pytest-cov
+httpx
+ruff
+bandit
+pip-audit
+build
