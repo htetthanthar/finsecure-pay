@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production-style overlay for Amazon EKS.
+# The Jenkins pipeline sets the image tag at deploy time with:
+#   kustomize edit set image finsecure-pay=docker.io/<user>/finsecure-pay:<tag>
+
+namespace: finsecure
+
+resources:
+  - ../../base
+
+components:
+  - ../../monitoring
+
+images:
+  - name: finsecure-pay
+    newName: docker.io/htetthanthar/finsecure-pay   # change to your Docker Hub user
+    newTag: 1.0.0

@@ -1,0 +1,48 @@
+# Least-privilege deploy permissions for the Jenkins pipeline.
+#
+# Jenkins authenticates with a dedicated IAM user that EKS maps (via an EKS
+# access entry, see infra/eks/cluster.yaml) to the Kubernetes group
+# "finsecure-deployers". That group can manage application resources in the
+# finsecure namespace only - it cannot touch other namespaces, nodes, RBAC or
+# cluster-wide objects. Applied once by a cluster admin during bootstrap.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: finsecure-deployer
+  namespace: finsecure
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets", "services", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors", "prometheusrules"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: finsecure-deployer
+  namespace: finsecure
+subjects:
+  - kind: Group
+    name: finsecure-deployers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: finsecure-deployer
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: finsecure-pay
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+spec:
+  # Node drains / upgrades may evict at most one pod at a time.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finsecure-pay

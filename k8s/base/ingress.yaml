@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finsecure-pay
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+  annotations:
+    # AWS Load Balancer Controller provisions an internet-facing ALB.
+    # (ingress-nginx was retired by the Kubernetes project in March 2026.)
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # "ip" targets: the ALB sends traffic straight to pod IPs (VPC CNI), so
+    # readiness changes take effect at the load balancer immediately.
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /readyz
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "10"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=15
+    alb.ingress.kubernetes.io/load-balancer-attributes: routing.http.drop_invalid_header_fields.enabled=true
+    alb.ingress.kubernetes.io/tags: project=finsecure-pay
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: finsecure-pay
+                port:
+                  name: http

@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finsecure-pay
+  labels:
+    app.kubernetes.io/name: finsecure-pay
+    app.kubernetes.io/component: api
+spec:
+  # Baseline of two replicas (brief requirement). The HPA scales between 2 and 6;
+  # each `kubectl apply` resets this to 2 and the HPA re-scales within seconds.
+  replicas: 2
+  revisionHistoryLimit: 10          # keeps old ReplicaSets so we can roll back
+  progressDeadlineSeconds: 180      # rollout marked failed if not done in 3 min
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                   # bring one new pod up first...
+      maxUnavailable: 0             # ...and never drop below desired capacity
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finsecure-pay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: finsecure-pay
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: finsecure-pay
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across nodes and availability zones so a single node
+      # or AZ failure cannot take the whole service down.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: finsecure-pay
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: finsecure-pay
+      containers:
+        - name: api
+          image: finsecure-pay
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: finsecure-pay-config
+          env:
+            - name: API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: finsecure-pay-secrets   # created by the pipeline, never in Git
+                  key: API_KEYS
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # startupProbe gates the other two: liveness/readiness only begin once
+          # the app has started, so a slow start is never killed prematurely.
+          # Budget: 2s initial delay + 30 x 2s = up to ~62s to start.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          # Liveness: restart the container if the process hangs (3 x 10s = 30s).
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # Readiness: remove the pod from the Service quickly (2 x 5s = 10s) if
+          # config is invalid or the pod is draining. Never restarts the pod.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 2
+            successThreshold: 1
+            failureThreshold: 2
+          lifecycle:
+            # Give the load balancer time to deregister the pod before shutdown.
+            # Native sleep action: works on distroless (no shell needed).
+            preStop:
+              sleep:
+                seconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

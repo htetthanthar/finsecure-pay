@@ -1,0 +1,60 @@
+# Zero-trust networking for the finsecure namespace (enforced by the VPC CNI
+# network policy agent - enabled in infra/eks/cluster.yaml).
+#
+# 1. Deny all ingress and egress by default.
+# 2. Allow HTTP to the API only from the ALB (VPC CIDR) and from Prometheus.
+# 3. Allow DNS egress only - the API calls no other service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: finsecure-pay-allow-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: finsecure-pay
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # ALB (target-type ip) connects from its ENIs inside the VPC.
+        - ipBlock:
+            cidr: 192.168.0.0/16
+        # Prometheus scrapes /metrics from the monitoring namespace.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
