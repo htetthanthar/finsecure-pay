@@ -1,0 +1,50 @@
+# Fluent Bit DaemonSet (chart fluent/fluent-bit): tails every container's log
+# file on each node, parses the app's JSON log lines into fields, enriches them
+# with Kubernetes metadata and ships them to Loki.
+resources:
+  requests: { cpu: 20m, memory: 48Mi }
+  limits: { memory: 128Mi }
+
+config:
+  service: |
+    [SERVICE]
+        Daemon Off
+        Flush 2
+        Log_Level info
+        Parsers_File /fluent-bit/etc/parsers.conf
+        HTTP_Server On
+        HTTP_Listen 0.0.0.0
+        HTTP_Port 2020
+        Health_Check On
+
+  inputs: |
+    [INPUT]
+        Name tail
+        Path /var/log/containers/*.log
+        Exclude_Path /var/log/containers/fluent-bit*.log
+        multiline.parser cri
+        Tag kube.*
+        Mem_Buf_Limit 10MB
+        Skip_Long_Lines On
+
+  filters: |
+    [FILTER]
+        Name kubernetes
+        Match kube.*
+        Merge_Log On
+        Keep_Log Off
+        K8S-Logging.Parser On
+        K8S-Logging.Exclude On
+        Labels Off
+        Annotations Off
+
+  outputs: |
+    [OUTPUT]
+        Name loki
+        Match kube.*
+        Host loki.monitoring.svc.cluster.local
+        Port 3100
+        Labels job=fluent-bit, namespace=$kubernetes['namespace_name'], pod=$kubernetes['pod_name'], container=$kubernetes['container_name']
+        Remove_Keys kubernetes,stream,_p
+        Line_Format json
+        Auto_Kubernetes_Labels Off

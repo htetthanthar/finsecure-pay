@@ -1,0 +1,79 @@
+# eksctl cluster definition for FinSecure Pay.
+#   infra/scripts/render.sh infra/eks/cluster.yaml | eksctl create cluster -f -
+# Requires AWS_ACCOUNT_ID in the environment (used for the Jenkins access entry).
+#
+# Cost guide (ap-southeast-1, on-demand): EKS control plane ~US$0.10/h,
+# 3 x t3.medium ~US$0.16/h, NAT gateway ~US$0.06/h + ALB ~US$0.03/h.
+# Roughly US$8/day - tear down with infra/scripts/teardown.sh when not demoing.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: finsecure-eks
+  region: ap-southeast-1          # Singapore
+  version: "1.36"                 # in EKS standard support (1.33 is extended support = 6x price)
+  tags:
+    project: finsecure-pay
+    environment: capstone
+
+vpc:
+  cidr: 192.168.0.0/16            # NetworkPolicy allows ALB traffic from this range
+  nat:
+    gateway: Single               # one NAT gateway (HA would be one per AZ)
+  clusterEndpoints:
+    publicAccess: true            # restrict publicAccessCIDRs to your IP for real use
+    privateAccess: true
+
+iam:
+  withOIDC: true                  # IAM Roles for Service Accounts (IRSA)
+  serviceAccounts:
+    - metadata:
+        name: aws-load-balancer-controller
+        namespace: kube-system
+      wellKnownPolicies:
+        awsLoadBalancerController: true
+
+accessConfig:
+  authenticationMode: API
+  accessEntries:
+    # Jenkins deploys as a dedicated IAM user mapped to a namespaced RBAC group
+    # (k8s/cluster/rbac-deployer.yaml) - not cluster-admin.
+    - principalARN: arn:aws:iam::${AWS_ACCOUNT_ID}:user/finsecure-jenkins-deployer
+      type: STANDARD
+      kubernetesGroups:
+        - finsecure-deployers
+
+addons:
+  - name: vpc-cni
+    # Enables enforcement of Kubernetes NetworkPolicy objects.
+    configurationValues: |-
+      enableNetworkPolicy: "true"
+  - name: coredns
+  - name: kube-proxy
+
+managedNodeGroups:
+  - name: ng-general
+    instanceType: t3.medium       # 2 vCPU / 4 GiB, max 17 pods per node
+    desiredCapacity: 3
+    minSize: 2
+    maxSize: 4
+    volumeSize: 30
+    volumeEncrypted: true
+    privateNetworking: true       # nodes in private subnets, no public IPs
+    disableIMDSv1: true           # IMDSv2 only
+    disablePodIMDS: true          # pods cannot borrow the node's IAM role
+    labels:
+      workload: general
+    tags:
+      project: finsecure-pay
+
+cloudWatch:
+  clusterLogging:
+    # Control-plane audit trail (who changed what in the cluster).
+    enableTypes: ["api", "audit", "authenticator"]
+    logRetentionInDays: 7
+
+# Kubernetes Secrets are envelope-encrypted at rest by EKS by default.
+# To use your own customer-managed KMS key instead, uncomment:
+# secretsEncryption:
+#   keyARN: arn:aws:kms:ap-southeast-1:${AWS_ACCOUNT_ID}:key/<key-id>

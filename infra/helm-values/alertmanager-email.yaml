@@ -1,0 +1,40 @@
+# Alertmanager routing: e-mail only.
+# ${ALERT_EMAIL_TO} and ${SMTP_USERNAME} are filled in by infra/scripts/render.sh at install time.
+# The SMTP password is read from a mounted Secret file, never from this file.
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: smtp.gmail.com:587
+      smtp_from: ${SMTP_USERNAME}
+      smtp_auth_username: ${SMTP_USERNAME}
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-notifiers/smtp-password
+      smtp_require_tls: true
+    route:
+      receiver: "null"
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 2m
+      repeat_interval: 4h
+      routes:
+        - receiver: "null"
+          matchers: ['alertname =~ "Watchdog|InfoInhibitor"']
+        - receiver: finsecure-team
+          matchers: ['namespace = "finsecure"']
+        - receiver: finsecure-team
+          matchers: ['alertname =~ "FinSecure.*"']
+        - receiver: finsecure-team
+          matchers: ['severity = "critical"']
+    inhibit_rules:
+      # A critical alert silences the matching warning for the same target.
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity = "warning"']
+        equal: ["alertname", "namespace", "pod"]
+    receivers:
+      - name: "null"
+      - name: finsecure-team
+        email_configs:
+          - to: ${ALERT_EMAIL_TO}
+            send_resolved: true
+            headers:
+              Subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }}) - FinSecure Pay'
