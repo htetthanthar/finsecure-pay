@@ -1,0 +1,16 @@
+configuration-as-code
+job-dsl
+workflow-aggregator
+pipeline-graph-view
+pipeline-stage-view
+git
+github
+credentials-binding
+timestamper
+ansicolor
+junit
+coverage
+warnings-ng
+email-ext
+sonar
+matrix-auth

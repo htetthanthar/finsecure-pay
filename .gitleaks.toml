@@ -1,0 +1,12 @@
+# Gitleaks configuration: the default rule set, plus one narrow allowlist.
+title = "FinSecure Pay secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic, non-functional secrets used only to unit-test the AI log-redaction logic"
+paths = [
+  '''^ai/tests/test_analyze\.py$''',
+  '''^ai/tests/fixtures/.*\.log$''',
+]

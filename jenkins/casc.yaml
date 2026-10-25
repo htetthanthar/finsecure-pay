@@ -1,0 +1,105 @@
+# Jenkins Configuration as Code. Every ${VAR} comes from jenkins/.env
+# (git-ignored) so no secret is ever committed.
+jenkins:
+  systemMessage: "FinSecure Pay CI/CD - configured as code (jenkins/casc.yaml)"
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USER}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: NOTIFY_EMAIL
+            value: "${NOTIFY_EMAIL}"
+          - key: SONAR_ORGANIZATION
+            value: "${SONAR_ORGANIZATION:-}"
+
+security:
+  # The AI failure-analysis step reads the console log of the current build.
+  scriptApproval:
+    approvedSignatures:
+      - "method org.jenkinsci.plugins.workflow.support.steps.build.RunWrapper getRawBuild"
+      - "method hudson.model.Run getLog int"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: dockerhub-credentials
+              description: Docker Hub user + access token
+              username: "${DOCKERHUB_USER}"
+              password: "${DOCKERHUB_TOKEN}"
+          - usernamePassword:
+              scope: GLOBAL
+              id: aws-deployer
+              description: IAM user finsecure-jenkins-deployer (access key / secret)
+              username: "${AWS_DEPLOYER_ACCESS_KEY_ID}"
+              password: "${AWS_DEPLOYER_SECRET_ACCESS_KEY}"
+          - string:
+              scope: GLOBAL
+              id: finsecure-api-keys
+              description: API key(s) for the FinSecure Pay /validate endpoint
+              secret: "${FINSECURE_API_KEYS}"
+          - string:
+              scope: GLOBAL
+              id: sonar-token
+              description: SonarQube / SonarCloud token
+              secret: "${SONAR_TOKEN}"
+          - usernamePassword:
+              scope: GLOBAL
+              id: smtp-credentials
+              description: SMTP login (Gmail App Password)
+              username: "${SMTP_USERNAME}"
+              password: "${SMTP_PASSWORD}"
+          - string:
+              scope: GLOBAL
+              id: anthropic-api-key
+              description: OPTIONAL - LLM for AI failure analysis
+              secret: "${ANTHROPIC_API_KEY:-not-configured}"
+
+unclassified:
+  location:
+    url: "${JENKINS_URL:-http://localhost:8081/}"
+    adminAddress: "${SMTP_USERNAME}"
+  # Keys verified against the plugins' own configuration-as-code test fixtures.
+  sonarglobalconfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: sonarqube
+        serverUrl: "${SONAR_HOST_URL:-https://sonarcloud.io}"
+        credentialsId: sonar-token
+  email-ext:
+    mailAccount:
+      smtpHost: smtp.gmail.com
+      smtpPort: "587"
+      credentialsId: smtp-credentials
+      useTls: true
+    defaultContentType: text/html
+    charset: UTF-8
+
+jobs:
+  - script: |
+      pipelineJob('finsecure-pay') {
+        description('FinSecure Pay: build, test, scan, containerise and deploy to EKS')
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote { url('${GIT_REPO_URL}') }
+                branch('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+            lightweight(true)
+          }
+        }
+      }

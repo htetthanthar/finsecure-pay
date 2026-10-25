@@ -1,0 +1,42 @@
+# Local Jenkins (and optional SonarQube) for the FinSecure Pay pipeline.
+#   cp jenkins/.env.example jenkins/.env      # fill in your values
+#   docker compose -f jenkins/docker-compose.yml up -d --build
+#   -> Jenkins on http://localhost:8081
+#
+# SonarCloud (free for public repos) is the default code-quality server.
+# To self-host SonarQube instead:  ... --profile sonarqube up -d
+# and set SONAR_HOST_URL=http://sonarqube:9000 in jenkins/.env.
+name: finsecure-ci
+
+services:
+  jenkins:
+    build: .
+    image: finsecure-jenkins:local
+    container_name: finsecure-jenkins
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8081:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Docker-outside-of-Docker: builds run on the host's Docker engine.
+      # Note: access to the socket is root-equivalent on the host - acceptable
+      # for a local lab, use dedicated build agents (or Kaniko) in production.
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-0}"   # Docker Desktop: 0. Linux: `getent group docker | cut -d: -f3`
+
+  sonarqube:
+    profiles: ["sonarqube"]
+    image: sonarqube:community
+    container_name: finsecure-sonarqube
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+
+volumes:
+  jenkins_home:
+  sonarqube_data:
+  sonarqube_extensions:
