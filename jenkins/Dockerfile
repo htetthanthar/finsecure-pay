@@ -7,11 +7,16 @@ FROM jenkins/jenkins:lts-jdk21
 ARG KUBECTL_MINOR=1.36
 ARG KUSTOMIZE_VERSION=5.7.1
 ARG GITLEAKS_VERSION=8.28.0
-ARG SONAR_SCANNER_VERSION=7.2.0.5079
+ARG SONAR_SCANNER_VERSION=8.1.0.6389
 
 USER root
 
-# Base tools + Docker CLI (talks to the host's Docker through the mounted socket)
+# Fail any RUN step whose pipe fails (e.g. `curl ... | bash` with a failed download).
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Base tools + Docker CLI (talks to the host's Docker through the mounted socket).
+# Packages are left unpinned on purpose so each rebuild picks up security patches.
+# hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg unzip jq git make python3 python3-yaml \
@@ -25,6 +30,13 @@ RUN apt-get update \
  && apt-get update \
  && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin trivy \
  && rm -rf /var/lib/apt/lists/*
+
+# Refuse Trivy releases compromised in the March 2026 supply-chain attack (CVE-2026-33634).
+RUN TRIVY_VERSION_INFO="$(trivy --version)" \
+ && echo "$TRIVY_VERSION_INFO" \
+ && if grep -Exq 'Version: 0\.69\.(4|5|6)' <<< "$TRIVY_VERSION_INFO"; then \
+      echo "Refusing compromised Trivy release" >&2; exit 1; \
+    fi
 
 # kubectl: latest patch of the cluster's minor version (client must be within +/-1 minor)
 RUN KVER=$(curl -fsSL "https://dl.k8s.io/release/stable-${KUBECTL_MINOR}.txt") \
@@ -46,11 +58,12 @@ RUN curl -fsSLo /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-
  && /tmp/aws/install \
  && rm -rf /tmp/aws /tmp/awscliv2.zip
 
-# SonarScanner CLI (uses the JDK already in the image)
+# SonarScanner CLI 8.x (generic zip, runs on the image's Java 21)
 RUN curl -fsSLo /tmp/sonar.zip "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip" \
- && unzip -q /tmp/sonar.zip -d /opt \
- && ln -s "/opt/sonar-scanner-${SONAR_SCANNER_VERSION}/bin/sonar-scanner" /usr/local/bin/sonar-scanner \
- && rm /tmp/sonar.zip
+ && unzip -q /tmp/sonar.zip -d /tmp/sonar \
+ && mv /tmp/sonar/sonar-scanner-* /opt/sonar-scanner \
+ && ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner \
+ && rm -rf /tmp/sonar.zip /tmp/sonar
 
 # uv + Python 3.11 (same minor version as the distroless runtime image)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -62,6 +75,8 @@ USER jenkins
 # Plugins and configuration-as-code
 COPY --chown=jenkins:jenkins plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
-COPY --chown=jenkins:jenkins casc.yaml /var/jenkins_home/casc_configs/casc.yaml
-ENV CASC_JENKINS_CONFIG=/var/jenkins_home/casc_configs/casc.yaml \
+# Kept outside /var/jenkins_home (a volume), so a rebuilt image always applies the
+# current casc.yaml instead of the copy frozen into the volume on first start.
+COPY --chown=jenkins:jenkins casc.yaml /var/jenkins_conf/casc.yaml
+ENV CASC_JENKINS_CONFIG=/var/jenkins_conf/casc.yaml \
     JAVA_OPTS="-Djenkins.install.runSetupWizard=false"

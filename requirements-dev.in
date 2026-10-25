@@ -6,6 +6,6 @@ pyyaml
 pytest-cov
 httpx
 ruff
-bandit
+bandit[sarif]
 pip-audit
 build

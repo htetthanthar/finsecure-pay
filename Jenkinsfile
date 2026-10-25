@@ -194,10 +194,14 @@ pipeline {
                     steps {
                         sh '''
                             # Runtime lock file only: dev tools never ship in the image.
-                            TRIVY_SKIP="--skip-dirs .venv,dist,reports,.git --skip-files requirements-dev.txt"
-                            trivy fs --scanners vuln $TRIVY_SKIP --format sarif --output "$REPORTS/trivy-deps.sarif" .
+                            # Trivy is fed plain name==version pins (pip-compile hash lines stripped)
+                            # so every locked package is guaranteed to be parsed.
+                            mkdir -p "$REPORTS/deps"
+                            sed -n 's/^\\([A-Za-z0-9._-]*==[^ ]*\\).*/\\1/p' requirements.txt > "$REPORTS/deps/requirements.txt"
+                            echo "Scanning $(wc -l < "$REPORTS/deps/requirements.txt") locked runtime packages"
+                            trivy fs --scanners vuln --format sarif --output "$REPORTS/trivy-deps.sarif" "$REPORTS/deps"
                             # Gate: HIGH or CRITICAL CVE in any runtime dependency fails the build.
-                            trivy fs --scanners vuln $TRIVY_SKIP --severity HIGH,CRITICAL --exit-code 1 .
+                            trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$REPORTS/deps"
                             # Second opinion from the PyPA advisory database (report only).
                             "$VENV/bin/pip-audit" -r requirements.txt --require-hashes --disable-pip \
                                 --format json --output "$REPORTS/pip-audit.json" || true
