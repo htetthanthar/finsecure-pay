@@ -1,0 +1,16 @@
+[Pipeline] { (Security Checks)
+[Pipeline] { (Dependency Scan)
++ trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 .
+2026-10-25T10:01:02Z	INFO	Number of language-specific files	num=1
+
+requirements.txt (pip)
+======================
+Total: 2 (HIGH: 2, CRITICAL: 0)
+
+┌──────────┬────────────────┬──────────┬────────┬───────────────────┬───────────────┬──────────────────────────────────────┐
+│ Library  │ Vulnerability  │ Severity │ Status │ Installed Version │ Fixed Version │                Title                 │
+├──────────┼────────────────┼──────────┼────────┼───────────────────┼───────────────┼──────────────────────────────────────┤
+│ requests │ CVE-2018-18074 │ HIGH     │ fixed  │ 2.19.1            │ 2.20.0        │ python-requests: Redirect from HTTPS │
+│ urllib3  │ CVE-2018-20060 │ HIGH     │ fixed  │ 1.23              │ 1.23.1        │ python-urllib3: Cross-host redirect  │
+└──────────┴────────────────┴──────────┴────────┴───────────────────┴───────────────┴──────────────────────────────────────┘
+script returned exit code 1

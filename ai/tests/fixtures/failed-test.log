@@ -1,0 +1,15 @@
+[Pipeline] { (Checkout)
+[Pipeline] }
+[Pipeline] { (Unit & Integration Tests)
+[Pipeline] sh
++ .venv/bin/pytest --junitxml=reports/junit.xml --cov
+........F.......
+=================================== FAILURES ===================================
+_____________________ test_valid_transaction_is_approved ______________________
+>       assert response.status_code == 200
+E       assert 422 == 200
+FAILED tests/test_api.py::test_valid_transaction_is_approved[/validate] - assert 422 == 200
+========================= 1 failed, 85 passed in 2.31s =========================
+script returned exit code 1
+[Pipeline] }
+[Pipeline] { (Declarative: Post Actions)

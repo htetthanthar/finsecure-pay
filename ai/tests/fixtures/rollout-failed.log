@@ -1,0 +1,14 @@
+[Pipeline] { (Container Build)
++ trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 docker.io/x/finsecure-pay:1.1.0-14-abc1234
+
+docker.io/x/finsecure-pay:1.1.0-14-abc1234 (debian 12.11)
+=========================================================
+Total: 0 (HIGH: 0, CRITICAL: 0)
+
+[Pipeline] { (Deploy to EKS)
++ kubectl -n finsecure rollout status deployment/finsecure-pay --timeout=180s
+Waiting for deployment "finsecure-pay" rollout to finish: 1 out of 2 new replicas have been updated...
+error: deployment "finsecure-pay" exceeded its progress deadline
+Rollout did not become healthy - rolling back automatically
+deployment.apps/finsecure-pay rolled back
+ERROR: Deployment failed health checks and was rolled back to the previous revision
