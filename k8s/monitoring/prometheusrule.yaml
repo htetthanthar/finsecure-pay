@@ -67,13 +67,16 @@ spec:
             runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-decline-rate"
 
         # Statistical anomaly detection (AIOps building block): flags traffic that is
-        # more than 3 standard deviations away from the past hour's behaviour.
+        # more than 3 standard deviations away from the hour before the last 10 minutes.
+        # The baseline is offset so an ongoing spike cannot inflate its own baseline
+        # (found by the promtool unit test); the 0.1 req/s floor on the deviation
+        # stops tiny wobbles in very steady traffic from looking anomalous.
         - alert: FinSecureTrafficAnomaly
           expr: |
             abs(
-              (finsecure:http_requests:rate5m - avg_over_time(finsecure:http_requests:rate5m[1h]))
+              (finsecure:http_requests:rate5m - avg_over_time(finsecure:http_requests:rate5m[1h] offset 10m))
                 /
-              clamp_min(stddev_over_time(finsecure:http_requests:rate5m[1h]), 0.01)
+              clamp_min(stddev_over_time(finsecure:http_requests:rate5m[1h] offset 10m), 0.1)
             ) > 3
           for: 5m
           labels:
@@ -82,7 +85,7 @@ spec:
             detector: zscore
           annotations:
             summary: "Request rate is anomalous (z-score {{ $value | printf \"%.1f\" }})"
-            description: "Traffic deviates more than 3 sigma from the last hour's baseline. Could be a traffic spike, an outage upstream, or abuse."
+            description: "Traffic deviates more than 3 sigma from its baseline (the hour before the last 10 minutes). Could be a traffic spike, an outage upstream, or abuse."
 
         - alert: FinSecureTargetDown
           expr: up{namespace="finsecure", job="finsecure-pay"} == 0 or absent(up{job="finsecure-pay"})

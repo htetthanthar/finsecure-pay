@@ -106,3 +106,141 @@ tests:
             exp_annotations:
               summary: "Prometheus cannot scrape FinSecure Pay"
               description: "No FinSecure Pay target has been scrapeable for 2 minutes."
+
+  # ---------------------------------------------------------------- p95 latency
+  - name: p95 latency above 500ms alerts after 5 minutes
+    interval: 15s
+    input_series:
+      # every request lands in the (0.5s, 1.0s] bucket => p95 = 0.975s
+      - series: 'http_request_duration_seconds_bucket{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",le="0.25"}'
+        values: '0+0x60'
+      - series: 'http_request_duration_seconds_bucket{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",le="0.5"}'
+        values: '0+0x60'
+      - series: 'http_request_duration_seconds_bucket{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",le="1"}'
+        values: '0+10x60'
+      - series: 'http_request_duration_seconds_bucket{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",le="+Inf"}'
+        values: '0+10x60'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FinSecureHighLatencyP95
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: FinSecureHighLatencyP95
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: payments
+            exp_annotations:
+              summary: "p95 validation latency is 975ms"
+              description: "95th percentile latency for /validate has been above 500ms for 5 minutes."
+              runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-latency"
+
+  # ---------------------------------------------------------------- decline rate
+  - name: more than half of transactions declined alerts after 5 minutes
+    interval: 15s
+    input_series:
+      - series: 'finsecure_transactions_validated_total{namespace="finsecure",job="finsecure-pay",decision="DECLINED"}'
+        values: '0+12x60'
+      - series: 'finsecure_transactions_validated_total{namespace="finsecure",job="finsecure-pay",decision="APPROVED"}'
+        values: '0+3x60'
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="422"}'
+        values: '0+12x60'
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="200"}'
+        values: '0+3x60'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: FinSecureHighDeclineRate
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: payments
+            exp_annotations:
+              summary: "80% of transactions are being declined"
+              description: "Over half of transactions declined for 5 minutes - possible card-testing attack, misconfigured limits, or a bad client release. Check the decline-reasons panel."
+              runbook_url: "https://github.com/htetthanthar/finsecure-pay/blob/main/docs/operations-runbook.md#high-decline-rate"
+
+  # ---------------------------------------------------------------- traffic anomaly (z-score)
+  - name: traffic spike far from the hourly baseline alerts
+    interval: 1m
+    input_series:
+      # steady 1 req/s for an hour, then a sudden jump to 10 req/s
+      - series: 'http_requests_total{namespace="finsecure",job="finsecure-pay",method="POST",route="/validate",status="200"}'
+        values: '0+60x70 4260+600x20'
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: FinSecureTrafficAnomaly
+        exp_alerts: []
+      - eval_time: 80m
+        alertname: FinSecureTrafficAnomaly
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: payments
+              detector: zscore
+            exp_annotations:
+              summary: "Request rate is anomalous (z-score 90.0)"
+              description: "Traffic deviates more than 3 sigma from its baseline (the hour before the last 10 minutes). Could be a traffic spike, an outage upstream, or abuse."
+
+  # ---------------------------------------------------------------- memory vs limit
+  - name: memory above 85 percent of limit alerts
+    interval: 15s
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="finsecure",container="api",pod="finsecure-pay-abc"}'
+        values: '180000000x40'
+      - series: 'kube_pod_container_resource_limits{namespace="finsecure",container="api",pod="finsecure-pay-abc",resource="memory",unit="byte"}'
+        values: '200000000x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: FinSecureHighMemory
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              pod: finsecure-pay-abc
+            exp_annotations:
+              summary: "Pod finsecure-pay-abc is using 90% of its memory limit"
+              description: "Memory above 85% of limit; the pod risks being OOM-killed."
+
+  # ---------------------------------------------------------------- liveness restarts
+  - name: repeated restarts alert immediately
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="finsecure",container="api",pod="finsecure-pay-abc"}'
+        values: '0+1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: FinSecurePodRestarting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              namespace: finsecure
+              container: api
+              pod: finsecure-pay-abc
+            exp_annotations:
+              summary: "Pod finsecure-pay-abc restarted 10 times in 10 minutes"
+              description: "Repeated restarts usually mean liveness-probe failures or OOM kills. Check `kubectl describe pod` events and previous logs."
+
+  # ---------------------------------------------------------------- replicas unavailable
+  - name: fewer available replicas than desired alerts after 3 minutes
+    interval: 15s
+    input_series:
+      - series: 'kube_deployment_spec_replicas{namespace="finsecure",deployment="finsecure-pay"}'
+        values: '2x30'
+      - series: 'kube_deployment_status_replicas_available{namespace="finsecure",deployment="finsecure-pay"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: FinSecureReplicasUnavailable
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: FinSecureReplicasUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              team: platform
+              namespace: finsecure
+              deployment: finsecure-pay
+            exp_annotations:
+              summary: "FinSecure Pay has fewer available replicas than desired"
+              description: "Available replicas have been below the desired count for 3 minutes (stuck rollout or capacity issue)."
