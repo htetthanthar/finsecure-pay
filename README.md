@@ -110,7 +110,11 @@ aws iam put-user-policy --user-name finsecure-jenkins-deployer \
 aws iam create-access-key --user-name finsecure-jenkins-deployer   # -> jenkins/.env
 ```
 
-**2. Jenkins.** Fill in `jenkins/.env` from `jenkins/.env.example`, then:
+**2. SonarCloud (once).** At sonarcloud.io, import the GitHub repo with project key
+`finsecure-pay`, then set *Administration → Analysis Method* to **CI-based** (turn
+*Automatic Analysis* off — SonarCloud rejects pipeline scans while it is on).
+
+**3. Jenkins.** Fill in `jenkins/.env` from `jenkins/.env.example`, then:
 
 ```bash
 docker compose -f jenkins/docker-compose.yml up -d --build   # http://localhost:8081
@@ -120,7 +124,7 @@ The image contains every CLI the project needs (aws, eksctl, kubectl, helm, kust
 trivy, gitleaks, sonar-scanner, uv), so the cluster scripts can run inside it too:
 `docker compose -f jenkins/docker-compose.yml exec jenkins bash`.
 
-**3. Cluster + platform add-ons** (EKS, ALB controller, metrics-server,
+**4. Cluster + platform add-ons** (EKS, ALB controller, metrics-server,
 Prometheus/Grafana/Alertmanager, Loki, Fluent Bit) — 20–25 minutes:
 
 ```bash
@@ -130,7 +134,7 @@ export AWS_ACCOUNT_ID=123456789012 ALERT_EMAIL_TO=you@example.com \
 infra/scripts/bootstrap-cluster.sh
 ```
 
-**4. Deploy.** Run the `finsecure-pay` job in Jenkins (afterwards every push to `main`
+**5. Deploy.** Run the `finsecure-pay` job in Jenkins (afterwards every push to `main`
 deploys automatically). Get the public URL:
 
 ```bash

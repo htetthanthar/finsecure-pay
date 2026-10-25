@@ -72,7 +72,11 @@ pipeline {
                         else
                             kubectl -n "$K8S_NAMESPACE" rollout undo deployment/"$APP_NAME"
                         fi
+                        kubectl -n "$K8S_NAMESPACE" annotate deployment/"$APP_NAME" --overwrite \
+                            kubernetes.io/change-cause="Jenkins #$BUILD_NUMBER: manual rollback ${ROLLBACK_REVISION:+to revision $ROLLBACK_REVISION}"
                         kubectl -n "$K8S_NAMESPACE" rollout status deployment/"$APP_NAME" --timeout=180s
+                        echo "--- history after rollback"
+                        kubectl -n "$K8S_NAMESPACE" rollout history deployment/"$APP_NAME"
                         echo "--- now running"
                         kubectl -n "$K8S_NAMESPACE" get deployment "$APP_NAME" \
                             -o jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
@@ -236,9 +240,9 @@ pipeline {
                 sh """
                     docker build \
                         --build-arg VERSION=${IMAGE_TAG} \
-                        --build-arg GIT_COMMIT=\$(git rev-parse HEAD) \
-                        --build-arg BUILD_DATE=\$(git log -1 --format=%cI) \
-                        --build-arg SOURCE_DATE_EPOCH=\$(git log -1 --format=%ct) \
+                        --build-arg GIT_COMMIT="\$(git rev-parse HEAD)" \
+                        --build-arg BUILD_DATE="\$(git log -1 --format=%cI)" \
+                        --build-arg SOURCE_DATE_EPOCH="\$(git log -1 --format=%ct)" \
                         --tag ${IMAGE_REPO}:${IMAGE_TAG} .
                     docker image inspect ${IMAGE_REPO}:${IMAGE_TAG} --format 'Image size: {{.Size}} bytes, user: {{.Config.User}}'
                 """
@@ -394,6 +398,8 @@ def rollbackDeployment() {
     sh '''
         set +e
         kubectl -n "$K8S_NAMESPACE" rollout undo deployment/"$APP_NAME" \
+            && kubectl -n "$K8S_NAMESPACE" annotate deployment/"$APP_NAME" --overwrite \
+                kubernetes.io/change-cause="Jenkins #$BUILD_NUMBER: automatic rollback (new version unhealthy)" \
             && kubectl -n "$K8S_NAMESPACE" rollout status deployment/"$APP_NAME" --timeout=180s
         kubectl -n "$K8S_NAMESPACE" rollout history deployment/"$APP_NAME" | tail -5
         kubectl -n "$K8S_NAMESPACE" get pods -o wide
