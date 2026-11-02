@@ -15,5 +15,5 @@ components:
 
 images:
   - name: finsecure-pay
-    newName: docker.io/htetthanthar/finsecure-pay   # change to your Docker Hub user
+    newName: docker.io/kelvinsoe007/finsecure-pay   # change to your Docker Hub user
     newTag: 1.0.0

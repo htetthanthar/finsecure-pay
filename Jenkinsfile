@@ -45,7 +45,7 @@ pipeline {
 
     environment {
         APP_NAME        = 'finsecure-pay'
-        DOCKERHUB_USER  = 'htetthanthar'                       // change to your Docker Hub user
+        DOCKERHUB_USER  = 'kelvinsoe007'                       // change to your Docker Hub user
         IMAGE_REPO      = "docker.io/${DOCKERHUB_USER}/${APP_NAME}"
         AWS_REGION      = 'ap-southeast-1'
         EKS_CLUSTER     = 'finsecure-eks'
