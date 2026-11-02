@@ -110,9 +110,14 @@ def test_auth_enforced_over_http(server):
 def test_metrics_over_http(server):
     text = httpx.get(f"{server['base']}/metrics").text
     assert "finsecure_transactions_validated_total" in text
-    assert "process_resident_memory_bytes" in text
+    if sys.platform.startswith("linux"):  # process_* metrics read /proc, so Linux only
+        assert "process_resident_memory_bytes" in text
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Windows has no SIGTERM: the process is killed without a graceful shutdown",
+)
 def test_graceful_shutdown_and_json_logs(server):
     """Runs last in this module: stops the server and inspects its logs."""
     proc = server["proc"]
