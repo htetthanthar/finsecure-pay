@@ -79,6 +79,17 @@ def test_unknown_failure_falls_back_with_low_confidence():
     assert diagnosis.confidence < 0.5
     assert diagnosis.failing_stage == "Build"
 
+    # Jenkins also opens every later stage it skips; those must not be blamed.
+    skipped = (
+        "[Pipeline] { (Build)\nerror: Failed to create virtual environment\n"
+        '[Pipeline] { (Lint)\nStage "Lint" skipped due to earlier failure(s)\n'
+        '[Pipeline] { (Smoke Test)\nStage "Smoke Test" skipped due to earlier failure(s)\n'
+        "Failed in branch SAST - Bandit\n"
+    )
+    diagnosis = analyze.classify(skipped)
+    assert diagnosis.failing_stage == "Build"
+    assert diagnosis.evidence == ["error: Failed to create virtual environment"]
+
 
 def test_error_excerpt_is_bounded():
     log = "\n".join(f"line {i} error happened" for i in range(10_000))

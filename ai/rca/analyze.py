@@ -74,6 +74,9 @@ def redact(text: str) -> str:
 
 # --------------------------------------------------------------------------- log parsing
 STAGE_PATTERN = re.compile(r"\[Pipeline\] \{ \((?P<stage>[^)]+)\)")
+SKIPPED_PATTERN = re.compile(r'Stage "(?P<stage>[^"]+)" skipped due to')
+# Jenkins bookkeeping that mentions "failure" without being the failure itself.
+NOISE_PATTERN = re.compile(r'(Stage "[^"]+" skipped due to|Failed in branch |no leaks found)')
 ERROR_HINTS = re.compile(
     r"(?i)(error|failed|failure|exception|traceback|fatal|denied|forbidden|timed out|"
     r"unauthori[sz]ed|critical|high:|leaks found|exit code [1-9]|script returned exit code)"
@@ -81,11 +84,13 @@ ERROR_HINTS = re.compile(
 
 
 def failing_stage(log: str) -> str | None:
-    """Last stage entered before the failure (Jenkins prints `{ (Stage)`)."""
+    """Last stage that actually ran (Jenkins prints `{ (Stage)` even for skipped ones)."""
     stages = STAGE_PATTERN.findall(log)
     ignored = {"Declarative: Post Actions", "Declarative: Checkout SCM"}
+    ignored |= set(SKIPPED_PATTERN.findall(log))
     for stage in reversed(stages):
-        if stage not in ignored:
+        # Parallel stages are opened twice: "{ (Branch: Name)" and "{ (Name)".
+        if stage.removeprefix("Branch: ") not in ignored:
             return stage
     return None
 
@@ -314,7 +319,11 @@ def classify(log: str) -> Diagnosis:
                 evidence=[redact(e)[:300] for e in evidence],
                 failing_stage=stage,
             )
-    tail = [line for line in log.splitlines() if ERROR_HINTS.search(line)][-3:]
+    tail = [
+        line
+        for line in log.splitlines()
+        if ERROR_HINTS.search(line) and not NOISE_PATTERN.search(line)
+    ][-3:]
     return Diagnosis(
         category="UNKNOWN",
         root_cause="No known failure signature matched; manual investigation needed.",

@@ -119,7 +119,7 @@ pipeline {
             steps {
                 // Python 3.11 = same interpreter as the distroless runtime image.
                 sh '''
-                    uv venv --python 3.11 "$VENV"
+                    uv venv --clear --python 3.11 "$VENV"
                     uv pip install --python "$VENV/bin/python" --require-hashes -r requirements.txt -r requirements-dev.txt
                     "$VENV/bin/python" --version
                 '''

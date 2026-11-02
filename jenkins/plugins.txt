@@ -12,5 +12,6 @@ junit
 coverage
 warnings-ng
 email-ext
+matrix-project
 sonar
 matrix-auth
