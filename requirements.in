@@ -3,3 +3,4 @@
 fastapi
 uvicorn
 prometheus-client
+pyjwt==1.7.1   # signed merchant tokens
