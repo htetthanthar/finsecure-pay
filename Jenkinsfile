@@ -122,6 +122,13 @@ pipeline {
                     uv venv --clear --python 3.13 "$VENV"
                     uv pip install --python "$VENV/bin/python" --require-hashes -r requirements.txt -r requirements-dev.txt
                     "$VENV/bin/python" --version
+                    # Trivy vulnerability DB: download it once here (cached in Jenkins home)
+                    # instead of three scans racing for it in parallel; retried on slow networks.
+                    for attempt in 1 2 3; do
+                        trivy image --download-db-only --timeout 15m && break
+                        [ "$attempt" = 3 ] && exit 1
+                        echo "Trivy DB download failed (attempt $attempt), retrying in 20 s"; sleep 20
+                    done
                 '''
             }
         }
@@ -203,9 +210,9 @@ pipeline {
                             mkdir -p "$REPORTS/deps"
                             sed -n 's/^\\([A-Za-z0-9._-]*==[^ ]*\\).*/\\1/p' requirements.txt > "$REPORTS/deps/requirements.txt"
                             echo "Scanning $(wc -l < "$REPORTS/deps/requirements.txt") locked runtime packages"
-                            trivy fs --scanners vuln --format sarif --output "$REPORTS/trivy-deps.sarif" "$REPORTS/deps"
+                            trivy fs --skip-db-update --scanners vuln --format sarif --output "$REPORTS/trivy-deps.sarif" "$REPORTS/deps"
                             # Gate: HIGH or CRITICAL CVE in any runtime dependency fails the build.
-                            trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$REPORTS/deps"
+                            trivy fs --skip-db-update --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$REPORTS/deps"
                             # Second opinion from the PyPA advisory database (report only).
                             "$VENV/bin/pip-audit" -r requirements.txt --require-hashes --disable-pip \
                                 --format json --output "$REPORTS/pip-audit.json" || true
@@ -215,7 +222,7 @@ pipeline {
                 stage('IaC / Config Scan') {
                     steps {
                         sh '''
-                            TRIVY_SKIP="--skip-dirs .venv,dist,reports,.git"
+                            TRIVY_SKIP="--skip-check-update --skip-dirs .venv,dist,reports,.git"
                             trivy config $TRIVY_SKIP --format sarif --output "$REPORTS/trivy-config.sarif" .
                             # Gate: CRITICAL misconfiguration in the Dockerfile or Kubernetes manifests.
                             trivy config $TRIVY_SKIP --severity CRITICAL --exit-code 1 .
@@ -253,11 +260,11 @@ pipeline {
             when { expression { params.ACTION == 'build-and-deploy' } }
             steps {
                 sh """
-                    trivy image --format sarif --output "\$REPORTS/trivy-image.sarif" ${IMAGE_REPO}:${IMAGE_TAG}
+                    trivy image --skip-db-update --format sarif --output "\$REPORTS/trivy-image.sarif" ${IMAGE_REPO}:${IMAGE_TAG}
                     # Software Bill of Materials for the shipped image (CycloneDX)
-                    trivy image --format cyclonedx --output "\$REPORTS/sbom.cdx.json" ${IMAGE_REPO}:${IMAGE_TAG}
+                    trivy image --skip-db-update --format cyclonedx --output "\$REPORTS/sbom.cdx.json" ${IMAGE_REPO}:${IMAGE_TAG}
                     # Gate: HIGH or CRITICAL vulnerability with an available fix blocks the release.
-                    trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${IMAGE_REPO}:${IMAGE_TAG}
+                    trivy image --skip-db-update --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${IMAGE_REPO}:${IMAGE_TAG}
                 """
             }
             post {

@@ -75,6 +75,7 @@ def redact(text: str) -> str:
 # --------------------------------------------------------------------------- log parsing
 STAGE_PATTERN = re.compile(r"\[Pipeline\] \{ \((?P<stage>[^)]+)\)")
 SKIPPED_PATTERN = re.compile(r'Stage "(?P<stage>[^"]+)" skipped due to')
+FAILED_BRANCH_PATTERN = re.compile(r"Failed in branch (?P<stage>.+?)\s*$", re.M)
 # Jenkins bookkeeping that mentions "failure" without being the failure itself.
 NOISE_PATTERN = re.compile(r'(Stage "[^"]+" skipped due to|Failed in branch |no leaks found)')
 ERROR_HINTS = re.compile(
@@ -88,6 +89,10 @@ def failing_stage(log: str) -> str | None:
     stages = STAGE_PATTERN.findall(log)
     ignored = {"Declarative: Post Actions", "Declarative: Checkout SCM"}
     ignored |= set(SKIPPED_PATTERN.findall(log))
+    # A parallel branch that really ran and failed is named by Jenkins itself.
+    failed_branches = [b for b in FAILED_BRANCH_PATTERN.findall(log) if b not in ignored]
+    if failed_branches:
+        return failed_branches[0]
     for stage in reversed(stages):
         # Parallel stages are opened twice: "{ (Branch: Name)" and "{ (Name)".
         if stage.removeprefix("Branch: ") not in ignored:
