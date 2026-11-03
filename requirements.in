@@ -3,4 +3,4 @@
 fastapi
 uvicorn
 prometheus-client
-pyjwt==1.7.1   # signed merchant tokens
+pyjwt>=2.4.0   # signed merchant tokens (>=2.4.0 fixes CVE-2022-29217)
