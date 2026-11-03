@@ -12,7 +12,8 @@ read -r -p "This permanently deletes cluster ${CLUSTER}. Type the cluster name t
 
 aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION"
 kubectl -n finsecure delete ingress --all --ignore-not-found --wait=true
-echo "Waiting 60s for the ALB to be deprovisioned..."
+kubectl -n monitoring delete ingress --all --ignore-not-found --wait=true
+echo "Waiting 60s for the ALBs to be deprovisioned..."
 sleep 60
 eksctl delete cluster --name "$CLUSTER" --region "$REGION" --wait
 echo "Done. Check the EC2 > Load Balancers console for anything left behind."

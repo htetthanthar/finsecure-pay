@@ -26,6 +26,15 @@ sum by (status) (count_over_time({namespace="finsecure"} | json | message="reque
 
 A client can send `X-Request-ID: <id>`; the API echoes it back and puts it on every log line for that request.
 
+### Public monitoring URLs (optional)
+
+By default the monitoring UIs are reachable only through `kubectl port-forward`.
+`infra/scripts/expose-monitoring.sh` publishes Grafana (`:3000`), Prometheus (`:9090`)
+and Alertmanager (`:9093`) on one internet-facing ALB, restricted to an allow-listed
+CIDR (default: your current public IP). Prometheus and Alertmanager have no login
+and the ALB serves plain HTTP, so never use `0.0.0.0/0`. Remove with
+`infra/scripts/expose-monitoring.sh --remove`; `teardown.sh` also deletes it.
+
 ## High error rate
 
 `FinSecureHighErrorRate` — more than 5 % of requests returned HTTP 5xx for 1 minute.
