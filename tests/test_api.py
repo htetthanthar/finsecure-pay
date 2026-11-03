@@ -186,3 +186,9 @@ def test_asgi_module_exposes_app():
     from app.asgi import app
 
     assert app.title.startswith("FinSecure Pay")
+
+
+def test_sgd_transaction_limit_is_5000(client, make_txn):
+    """Demo: deliberately wrong expectation - the configured limit is 10000."""
+    response = client.post("/validate", json=make_txn(amount="7500.00", currency="SGD"))
+    assert response.status_code == 422
