@@ -27,7 +27,7 @@ FinSecure Pay is a small fintech start-up that needs to validate card transactio
 
 **Network topology.** The eksctl-created VPC (`192.168.0.0/16`) spans three AZs. Public subnets hold only the ALB and a NAT gateway; worker nodes sit in private subnets with no public IPs and reach Docker Hub through the NAT. Inside the cluster a default-deny NetworkPolicy (enforced by the VPC CNI policy agent) allows port 8080 only from the VPC (ALB) and the `monitoring` namespace, and allows DNS as the only egress.
 
-**Application.** A Python 3.11 / FastAPI microservice:
+**Application.** A Python 3.13 / FastAPI microservice:
 
 | Endpoint | Purpose |
 |---|---|
@@ -43,7 +43,7 @@ Validation rules: positive amount within a configurable limit; correct decimal p
 
 | Area | Choice | Why (and alternatives considered) |
 |---|---|---|
-| Language / framework | **Python 3.11 + FastAPI**, pytest | The brief allows equivalents and the rubric names Python. Pydantic gives strict schema validation for free; FastAPI gives OpenAPI docs; the author can explain every line. Spring Boot/JUnit would meet the same requirements. |
+| Language / framework | **Python 3.13 + FastAPI**, pytest | The brief allows equivalents and the rubric names Python. Pydantic gives strict schema validation for free; FastAPI gives OpenAPI docs; the author can explain every line. Spring Boot/JUnit would meet the same requirements. |
 | Build / dependencies | **pip-tools lock with hashes**, `uv` in CI | `--require-hashes` makes builds reproducible and blocks tampered packages (Maven equivalent: dependency lock + checksums). |
 | Source control | Git + GitHub, Conventional Commits, SemVer tags | Readable history; tags drive image versions. |
 | CI/CD | **Jenkins** (Jenkinsfile + JCasC + Job DSL) | Recommended tool. The whole Jenkins server is code: plugins, credentials wiring, job and e-mail config are rebuilt from `jenkins/` in one command. |

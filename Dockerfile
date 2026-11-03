@@ -6,15 +6,16 @@
 # Stage 2 copies only those packages and the app source onto a distroless base
 # that has no shell, no package manager and runs as UID 65532 (nonroot).
 #
-# The builder's Python minor version MUST match the runtime's (3.11 on
-# distroless debian12) because compiled wheels (pydantic-core) are ABI-specific.
+# The builder's Python minor version MUST match the runtime's (3.13 on
+# distroless debian13) because compiled wheels (pydantic-core) are ABI-specific.
+# Debian 12 distroless images are no longer updated, so they are not used.
 #
 # Reproducibility: dependencies are pinned with hashes; pin the base images
 # by digest with scripts/pin-base-images.sh before a release, and build with
 #   --build-arg SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
 
-ARG BUILDER_IMAGE=python:3.11-slim-bookworm
-ARG RUNTIME_IMAGE=gcr.io/distroless/python3-debian12:nonroot
+ARG BUILDER_IMAGE=python:3.13-slim-trixie
+ARG RUNTIME_IMAGE=gcr.io/distroless/python3-debian13:nonroot
 
 # ---------------------------------------------------------------- builder
 FROM ${BUILDER_IMAGE} AS builder
@@ -60,6 +61,6 @@ EXPOSE 8080
 
 # Used by `docker run` locally; Kubernetes uses its own probes instead.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
-    CMD ["/usr/bin/python3.11", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+    CMD ["/usr/bin/python3.13", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
 
-ENTRYPOINT ["/usr/bin/python3.11", "-m", "app"]
+ENTRYPOINT ["/usr/bin/python3.13", "-m", "app"]

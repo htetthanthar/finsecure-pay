@@ -65,10 +65,10 @@ RUN curl -fsSLo /tmp/sonar.zip "https://binaries.sonarsource.com/Distribution/so
  && ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner \
  && rm -rf /tmp/sonar.zip /tmp/sonar
 
-# uv + Python 3.11 (same minor version as the distroless runtime image)
+# uv + Python 3.13 (same minor version as the distroless runtime image)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
-RUN uv python install 3.11 && chmod -R a+rX /opt/uv-python
+RUN uv python install 3.13 && chmod -R a+rX /opt/uv-python
 
 USER jenkins
 

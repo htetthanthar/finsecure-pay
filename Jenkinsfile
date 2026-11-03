@@ -117,9 +117,9 @@ pipeline {
         stage('Build') {
             when { expression { params.ACTION == 'build-and-deploy' } }
             steps {
-                // Python 3.11 = same interpreter as the distroless runtime image.
+                // Python 3.13 = same interpreter as the distroless runtime image.
                 sh '''
-                    uv venv --clear --python 3.11 "$VENV"
+                    uv venv --clear --python 3.13 "$VENV"
                     uv pip install --python "$VENV/bin/python" --require-hashes -r requirements.txt -r requirements-dev.txt
                     "$VENV/bin/python" --version
                 '''
@@ -238,7 +238,7 @@ pipeline {
             when { expression { params.ACTION == 'build-and-deploy' } }
             steps {
                 sh """
-                    docker build \
+                    docker build --pull \
                         --build-arg VERSION=${IMAGE_TAG} \
                         --build-arg GIT_COMMIT="\$(git rev-parse HEAD)" \
                         --build-arg BUILD_DATE="\$(git log -1 --format=%cI)" \

@@ -52,9 +52,16 @@ helm repo add fluent https://fluent.github.io/helm-charts
 helm repo update
 
 # ---------------------------------------------------------------- 4. metrics-server (HPA)
-log "Installing metrics-server (required by the HorizontalPodAutoscaler)"
-helm upgrade --install metrics-server metrics-server/metrics-server \
-  --namespace kube-system --wait
+# Recent eksctl releases install metrics-server as a managed EKS add-on during
+# cluster creation; Helm cannot adopt that copy, so only install it when missing.
+if kubectl -n kube-system get deployment metrics-server >/dev/null 2>&1; then
+  log "metrics-server already installed (EKS add-on) - skipping Helm install"
+else
+  log "Installing metrics-server (required by the HorizontalPodAutoscaler)"
+  helm upgrade --install metrics-server metrics-server/metrics-server \
+    --namespace kube-system --wait
+fi
+kubectl -n kube-system rollout status deployment/metrics-server --timeout=180s
 
 # ---------------------------------------------------------------- 5. AWS Load Balancer Controller
 log "Installing AWS Load Balancer Controller (provisions the ALB for the Ingress)"

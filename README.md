@@ -8,7 +8,7 @@ alerting, centralised logging, automatic rollback and AI-assisted failure analys
 
 | | |
 |---|---|
-| **App** | Python 3.11 · FastAPI · 86 tests · 100 % coverage |
+| **App** | Python 3.13 · FastAPI · 86 tests · 100 % coverage |
 | **Pipeline** | Jenkins (Jenkinsfile + JCasC): 12 stages, 6 blocking gates, auto-rollback |
 | **Security** | Gitleaks · Ruff · Bandit · SonarCloud · Trivy (deps, IaC, image, SBOM) · pip-audit |
 | **Runtime** | Distroless non-root image · EKS 1.36 · ALB · HPA · PDB · NetworkPolicy · Pod Security `restricted` |
